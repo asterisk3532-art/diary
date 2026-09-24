@@ -11,6 +11,7 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const toast = msg => { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 2000); };
 
+  document.addEventListener("gesturestart", e => e.preventDefault());
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   /* ================= 祝日 ================= */
@@ -317,6 +318,7 @@
   function showView(v) {
     ["cal","feed","search","stats","login"].forEach(x => $("#v-"+x).hidden = x !== v);
     $("#tabs").hidden = v === "login";
+    document.documentElement.classList.toggle("lock", v === "cal");
     document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-current", t.dataset.view === v ? "true" : "false"));
     if (v === "cal") renderCal(); if (v === "feed") renderFeed(); if (v === "search") runSearch(); if (v === "stats") renderStats();
     window.scrollTo(0, 0);
