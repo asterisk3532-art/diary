@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FBFAF5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15181E" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="日記">
+<title>日記</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --paper:#FBFAF5; --rule:#DCE3EC; --ink:#23304A; --muted:#7A8190; --faint:#EEF1F5;
+  --stamp:#C2403A; --stamp-soft:rgba(194,64,58,.12); --focus:#3F6FB5;
+  --holiday:#C2403A; --sat:#3E72A8; --rec:#2F7A5E;
+  --serif:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --sans:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#15181E; --rule:#2A313C; --ink:#E4E1D8; --muted:#8C93A0; --faint:#1D222A;
+    --stamp:#D9665E; --stamp-soft:rgba(217,102,94,.16); --focus:#7FA6E0;
+    --holiday:#D9665E; --sat:#79A6D8; --rec:#5FA98A;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#15181E; --rule:#2A313C; --ink:#E4E1D8; --muted:#8C93A0; --faint:#1D222A;
+  --stamp:#D9665E; --stamp-soft:rgba(217,102,94,.16); --focus:#7FA6E0;
+  --holiday:#D9665E; --sat:#79A6D8; --rec:#5FA98A;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}
+.wrap{max-width:560px;margin:0 auto;padding:0 20px 96px}
+
+/* top */
+.top{display:flex;align-items:baseline;justify-content:space-between;padding:18px 0 10px;border-bottom:1px solid var(--rule)}
+.month{font-family:var(--serif);font-weight:700;font-size:26px;letter-spacing:.02em}
+.month small{font-size:15px;color:var(--muted);font-weight:500;margin-right:6px}
+.mnav{display:flex;gap:4px}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:50%}
+.icon-btn:active{background:var(--faint)}
+.icon-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* calendar */
+.dow,.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.dow{padding:12px 0 4px;font-size:12px;color:var(--muted);text-align:center}
+.dow span:first-child{color:var(--holiday)}
+.dow span:last-child{color:var(--sat)}
+.grid{border-top:1px solid var(--rule)}
+.cell{position:relative;aspect-ratio:1/1;min-height:46px;overflow:hidden;border-bottom:1px solid var(--rule);
+  display:block;padding:6px 2px 0;text-align:center;font-variant-numeric:tabular-nums}
+.cell.out{visibility:hidden;pointer-events:none}
+.cell .n{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;font-size:15px}
+.cell.today .n{font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
+.cell.sun .n,.cell.hol .n{color:var(--holiday)}
+.cell.sat .n{color:var(--sat)}
+.cell.has .n{font-weight:700}
+.cell.has .n::before{content:"";position:absolute;inset:0;border:1.5px solid var(--rec);border-radius:50%;
+  transform:rotate(-8deg) scale(1.02);opacity:.9}
+.cell.raw .n::before{border-style:dashed}
+.cell .t{position:absolute;left:3px;right:3px;bottom:4px;font-size:10px;line-height:1.25;color:var(--muted);
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cell .hn{position:absolute;left:3px;right:3px;bottom:4px;font-size:9px;color:var(--holiday);
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cell:active{background:var(--faint)}
+@media (max-width:360px){.cell .t,.cell .hn{display:none}}
+
+.legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin:10px 0 0}
+.legend .lg{width:11px;height:11px;border-radius:50%;display:inline-block;margin-left:10px}
+.legend .lg:first-child{margin-left:0}
+.legend .lg.rec{border:1.5px solid var(--rec)}
+.legend .lg.raw{border:1.5px dashed var(--rec)}
+.legend .lg.hol{background:var(--holiday)}
+.legend .lg.sat{background:var(--sat)}
+.month-list{margin-top:26px}
+.section-h{font-family:var(--serif);font-weight:700;font-size:17px;margin:0 0 6px}
+.row{display:flex;gap:14px;align-items:baseline;width:100%;text-align:left;padding:11px 0;border-bottom:1px solid var(--rule)}
+.row .d{font-family:var(--serif);font-size:15px;min-width:56px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row .tt{flex:1;font-size:15px}
+.row .raw-mark{font-size:11px;color:var(--stamp);border:1px solid var(--stamp);padding:0 5px;border-radius:3px;white-space:nowrap}
+.empty{color:var(--muted);font-size:14px;padding:14px 0}
+
+/* bottom nav */
+.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--rule);
+  padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+.tabs-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tab{height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--muted)}
+.tab svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tab[aria-current="true"]{color:var(--ink);font-weight:700}
+
+/* views */
+.view[hidden]{display:none}
+
+/* day sheet */
+.sheet{position:fixed;inset:0;background:var(--paper);z-index:30;display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.sheet[hidden]{display:none}
+.sheet-bar{flex:none;max-width:560px;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--rule)}
+.sheet-bar .mid{display:flex;align-items:center;gap:2px}
+.sheet-body{flex:1;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.page{max-width:560px;margin:0 auto;padding:22px 22px 60px}
+.page.slide-l{animation:sl .22s ease-out}
+.page.slide-r{animation:sr .22s ease-out}
+@keyframes sl{from{transform:translateX(28px);opacity:.3}to{transform:none;opacity:1}}
+@keyframes sr{from{transform:translateX(-28px);opacity:.3}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.page.slide-l,.page.slide-r{animation:none}}
+.date-h{font-family:var(--serif);font-weight:700;font-size:30px;line-height:1.25;margin:0}
+.date-h .wd{font-size:17px;color:var(--muted);margin-left:8px;font-weight:500}
+.date-h .yr{display:block;font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.04em}
+.entry-title{font-family:var(--serif);font-size:19px;font-weight:700;line-height:1.5;margin:14px 0 8px}
+.meta{font-size:13px;color:var(--muted);line-height:1.9}
+.meta .tag{color:var(--ink);margin-right:10px;white-space:nowrap}
+.meta .tag:active{color:var(--stamp)}
+.meta .lbl{margin-right:6px}
+.oneline{margin:18px 0 6px;padding:10px 0 10px 14px;border-left:2px solid var(--stamp);font-family:var(--serif);font-size:16px}
+.md{margin-top:10px}
+.md h2{font-family:var(--serif);font-size:18px;font-weight:700;margin:28px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
+.md h3{font-size:15px;margin:18px 0 4px}
+.md p{margin:8px 0}
+.md ul,.md ol{padding-left:1.3em;margin:6px 0}
+.md li{margin:3px 0}
+.md strong{font-weight:700}
+.md input[type=checkbox]{margin-right:6px;accent-color:var(--stamp)}
+.md li:has(> input[type=checkbox]){list-style:none;margin-left:-1.3em}
+.notes{margin-top:28px}
+.note{border-top:1px dashed var(--rule);padding:10px 0;white-space:pre-wrap;font-size:15px}
+.note time{display:block;font-size:12px;color:var(--muted)}
+.raw-hint{font-size:12px;color:var(--stamp);margin:10px 0 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
+.btn{height:40px;padding:0 16px;border:1px solid var(--ink);border-radius:4px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.quiet{border-color:var(--rule);color:var(--muted)}
+.blank{padding:36px 0 10px;color:var(--muted)}
+.blank p{margin:0 0 18px}
+
+/* editor */
+.editor label{display:block;font-size:13px;color:var(--muted);margin:16px 0 4px}
+.editor input[type=text],.editor textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--rule);padding:6px 0;outline:none}
+.editor textarea{min-height:40vh;resize:vertical;line-height:1.8;border:1px solid var(--rule);padding:10px;border-radius:4px;
+  background-image:linear-gradient(transparent calc(1.8em - 1px),var(--rule) 1px);background-size:100% 1.8em;background-attachment:local}
+.editor input:focus,.editor textarea:focus{border-color:var(--focus)}
+.seg{display:flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-top:18px}
+.seg button{flex:1;height:36px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--faint);color:var(--ink);font-weight:700}
+.help{font-size:12px;color:var(--muted);margin-top:8px}
+
+/* search */
+.search-box{display:flex;align-items:center;gap:8px;border-bottom:1.5px solid var(--ink);margin-top:22px;padding:4px 0}
+.search-box svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:1.7}
+.search-box input{flex:1;border:0;background:transparent;outline:none;font-size:17px;padding:6px 0}
+.tagcloud{margin:16px 0 4px;font-size:14px;line-height:2.1}
+.tagcloud button{margin-right:12px;color:var(--ink)}
+.tagcloud button span{color:var(--muted);font-size:11px;margin-left:2px}
+.hit{display:block;width:100%;text-align:left;padding:13px 0;border-bottom:1px solid var(--rule)}
+.hit .hd{display:flex;gap:10px;align-items:baseline}
+.hit .d{font-family:var(--serif);color:var(--muted);font-size:14px;min-width:88px;font-variant-numeric:tabular-nums}
+.hit .tt{font-weight:700;font-size:15px}
+.hit .sn{font-size:13px;color:var(--muted);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+mark{background:var(--stamp-soft);color:inherit;padding:0 1px}
+
+/* stats */
+.stats-h{font-family:var(--serif);font-weight:700;font-size:26px;padding:18px 0 10px;border-bottom:1px solid var(--rule);margin:0}
+.kv{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--rule)}
+.kv div{padding:14px 0;border-bottom:1px solid var(--rule)}
+.kv div:nth-last-child(-n+2){border-bottom:0}
+.kv b{display:block;font-family:var(--serif);font-size:24px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.kv span{font-size:12px;color:var(--muted)}
+.bars{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;align-items:end;height:120px;margin-top:14px;border-bottom:1px solid var(--rule)}
+.bar{background:var(--stamp);opacity:.75;border-radius:2px 2px 0 0;min-height:1px}
+.bar.zero{background:var(--rule);opacity:1}
+.barlbl{display:grid;grid-template-columns:repeat(12,1fr);gap:6px;font-size:10px;color:var(--muted);text-align:center;margin-top:4px}
+.rank{margin-top:6px}
+.rank .r{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:14px;width:100%;text-align:left}
+.rank .r .nm{min-width:6.5em}
+.rank .r .ln{flex:1;height:4px;background:var(--faint);border-radius:2px;overflow:hidden}
+.rank .r .ln i{display:block;height:100%;background:var(--ink);opacity:.55}
+.rank .r .c{font-size:12px;color:var(--muted);min-width:2em;text-align:right;font-variant-numeric:tabular-nums}
+.gap{height:30px}
+
+.banner{margin:40px 0;color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);
+  font-size:13px;padding:8px 14px;border-radius:4px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+
+.sync{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin:10px 0 0;min-height:18px}
+.sync button{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+.login{padding:40px 0 10px}
+.login h1{font-family:var(--serif);font-size:24px;margin:0 0 10px}
+.login p{color:var(--muted);font-size:14px;margin:0 0 20px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <section class="view" id="v-cal">
+    <div class="top">
+      <div class="month" id="monthLabel"></div>
+      <div class="mnav">
+        <button class="icon-btn" id="prevM" aria-label="前の月"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="icon-btn" id="todayBtn" aria-label="今日"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/></svg></button>
+        <button class="icon-btn" id="nextM" aria-label="次の月"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>
+    <div class="dow"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+    <div class="grid" id="grid"></div>
+    <p class="legend"><span class="lg rec"></span>日記あり<span class="lg raw"></span>未整形<span class="lg hol"></span>日曜・祝日<span class="lg sat"></span>土曜</p>
+    <div class="sync" id="sync" aria-live="polite"></div>
+    <div class="month-list">
+      <h2 class="section-h" id="listH">この月の日記</h2>
+      <div id="monthList"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-search" hidden>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+      <input id="q" type="search" placeholder="言葉・人の名前・#タグで探す" autocomplete="off" enterkeyhint="search">
+    </div>
+    <div class="tagcloud" id="tagcloud"></div>
+    <div id="hits"></div>
+  </section>
+
+  <section class="view" id="v-stats" hidden>
+    <h1 class="stats-h">記録</h1>
+    <div class="kv" id="kv"></div>
+    <div class="gap"></div>
+    <h2 class="section-h">月ごとの記録日数</h2>
+    <div class="bars" id="bars"></div>
+    <div class="barlbl" id="barlbl"></div>
+    <div class="gap"></div>
+    <h2 class="section-h">よく出てくる人</h2>
+    <div class="rank" id="rankPeople"></div>
+    <div class="gap"></div>
+    <h2 class="section-h">よく付くタグ</h2>
+    <div class="rank" id="rankTags"></div>
+    <div class="gap"></div>
+    <div class="actions"><button class="btn quiet" id="signOut">ログアウト</button><button class="btn quiet" id="resync">すべて読み込み直す</button></div>
+  </section>
+
+  <section class="view" id="v-login" hidden>
+    <div class="login">
+      <h1>日記</h1>
+      <p>Google ドライブの「日記」フォルダを読み込みます。はじめに一度だけログインしてください。</p>
+      <button class="btn primary" id="signIn">Google でログイン</button>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" id="tabs" aria-label="画面の切り替え">
+  <div class="tabs-in">
+    <button class="tab" data-view="cal" aria-current="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>カレンダー</button>
+    <button class="tab" data-view="search" aria-current="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>検索</button>
+    <button class="tab" data-view="stats" aria-current="false"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-7"/></svg>記録</button>
+  </div>
+</nav>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="日記">
+  <div class="sheet-bar">
+    <button class="icon-btn" id="closeSheet" aria-label="カレンダーに戻る"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="mid">
+      <button class="icon-btn" id="prevD" aria-label="前の日"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="icon-btn" id="nextD" aria-label="次の日"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <button class="icon-btn" id="editBtn" aria-label="メモを書く"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
+  </div>
+  <div class="sheet-body" id="sheetBody"><div class="page" id="page"></div></div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
