@@ -5,5 +5,5 @@ window.DIARY_CONFIG = {
   // Google ドライブの「日記」フォルダの ID（作成済み）
   FOLDER_ID: "1zLPwCslA6aSUCqZxtNmmJrUoXJn3aXae",
   // ログインに使う Google アカウント（省略可）
-  LOGIN_HINT: "asterisk3532@gmail.com"
+  LOGIN_HINT: ""
 };
