@@ -222,6 +222,12 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none;height:100%}
 #v-cal .grid{flex:1;min-height:0;grid-auto-rows:1fr}
 #v-cal .legend,#v-cal .sync{flex:none}
 #v-cal .sync{margin-bottom:8px}
+
+/* 日記タブの月ヘッダーを上に固定 */
+#v-feed .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+#v-feed .top::before{content:"";position:absolute;left:-20px;right:-20px;bottom:100%;
+  height:env(safe-area-inset-top,0px);background:var(--paper)}
+#v-feed .top::after{content:"";position:absolute;left:-20px;right:-20px;top:0;bottom:-1px;background:var(--paper);z-index:-1}
 </style>
 </head>
 <body>
