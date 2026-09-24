@@ -60,7 +60,6 @@
   const clearToken = () => { try { localStorage.removeItem(TK); } catch {} };
 
   function signIn(silent) {
-    if (!CFG.CLIENT_ID || CFG.CLIENT_ID.startsWith("YOUR_")) { toast("config.js の CLIENT_ID が未設定です"); return; }
     const p = new URLSearchParams({
       client_id: CFG.CLIENT_ID, redirect_uri: redirectUri, response_type: "token",
       scope: SCOPES, include_granted_scopes: "true", state: silent ? "silent" : "interactive"
@@ -178,7 +177,6 @@
   }
 
   /* ================= 表示 ================= */
-  const fmtTime = iso => { if (!iso) return ""; const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const md = src => (window.marked && window.DOMPurify) ? DOMPurify.sanitize(marked.parse(src || "", { gfm: true })) : `<p style="white-space:pre-wrap">${esc(src)}</p>`;
   const plain = e => [e.title, e.oneLine, (e.body||"").replace(/[#*>\-\[\]`|]/g," "), ...(e.notes||[]).map(n=>n.text)].join(" ");
 
@@ -196,40 +194,14 @@
     }
     while (cells.length % 7) cells.push(`<div class="cell out"></div>`);
     $("#grid").innerHTML = cells.join("");
-  }
-  function renderFeed() {
-    const m = state.month, y = m.getFullYear(), mo = m.getMonth();
-    $("#feedLabel").innerHTML = `<small>${y}</small>${mo+1}月`;
     const list = [...state.entries.values()].filter(e => e.date.startsWith(`${y}-${pad(mo+1)}`)).sort((a,b) => a.date.localeCompare(b.date));
     $("#listH").textContent = `${mo+1}月の日記（${list.length}日）`;
     $("#monthList").innerHTML = list.length ? list.map(e => { const d = parse(e.date);
-      return `<button class="row" data-jump="${e.date}"><span class="d">${d.getDate()}日（${WD[d.getDay()]}）</span><span class="tt">${esc(e.title || "（メモのみ）")}</span>${e.formatted === false ? `<span class="raw-mark">未整形</span>` : ""}</button>`;
+      return `<button class="row" data-k="${e.date}"><span class="d">${d.getDate()}日（${WD[d.getDay()]}）</span><span class="tt">${esc(e.title || "（メモのみ）")}</span>${e.formatted === false ? `<span class="raw-mark">未整形</span>` : ""}</button>`;
     }).join("") : `<div class="empty">この月はまだ記録がありません。</div>`;
-    $("#feed").innerHTML = list.map(e => {
-      const d = parse(e.date), hol = HOL(e.date);
-      const tags = (e.tags||[]).map(t => `<button class="tag" data-q="#${esc(t)}">#${esc(t)}</button>`).join("");
-      const people = (e.people||[]).map(p => `<button class="tag" data-q="${esc(p)}">${esc(p)}</button>`).join("");
-      const notes = (e.notes||[]).length ? `<div class="notes"><h2 class="section-h">手書きメモ</h2>${e.notes.map(n => `<div class="note"><time>${esc(fmtTime(n.at))}</time>${esc(n.text)}</div>`).join("")}</div>` : "";
-      return `<article class="feed-entry" id="e-${e.date}">
-        <h2 class="feed-date">${d.getMonth()+1}月${d.getDate()}日<span class="wd">${WD[d.getDay()]}曜日${hol ? "・" + esc(hol) : ""}</span></h2>
-        ${e.title ? `<h3 class="entry-title">${esc(e.title)}</h3>` : ""}
-        <div class="meta">${people ? `<div><span class="lbl">人</span>${people}</div>` : ""}${tags ? `<div>${tags}</div>` : ""}</div>
-        ${e.formatted === false ? `<p class="raw-hint">未整形のメモがあります。次にClaudeと話すときに日記へまとめられます。</p>` : ""}
-        ${e.oneLine ? `<div class="oneline">${esc(e.oneLine)}</div>` : ""}
-        <div class="md">${md(e.body)}</div>${notes}
-        <button class="feed-open" data-k="${e.date}">この日を開く・メモを書く</button>
-      </article>`;
-    }).join("");
   }
-  $("#monthList").addEventListener("click", ev => { const b = ev.target.closest("[data-jump]"); if (b) document.getElementById("e-" + b.dataset.jump)?.scrollIntoView({ behavior: "smooth" }); });
-  $("#feed").addEventListener("click", ev => {
-    const q = ev.target.closest("[data-q]"); if (q) { showView("search"); $("#q").value = q.dataset.q; runSearch(); return; }
-    const k = ev.target.closest("[data-k]"); if (k) openDay(k.dataset.k);
-  });
-  const shiftMonth = n => { state.month = new Date(state.month.getFullYear(), state.month.getMonth()+n, 1); };
-  $("#fPrevM").onclick = () => { shiftMonth(-1); renderFeed(); window.scrollTo(0,0); };
-  $("#fNextM").onclick = () => { shiftMonth(1); renderFeed(); window.scrollTo(0,0); };
   $("#grid").addEventListener("click", ev => { const b = ev.target.closest("[data-k]"); if (b) openDay(b.dataset.k); });
+  $("#monthList").addEventListener("click", ev => { const b = ev.target.closest("[data-k]"); if (b) openDay(b.dataset.k); });
   $("#prevM").onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth()-1, 1); renderCal(); };
   $("#nextM").onclick = () => { state.month = new Date(state.month.getFullYear(), state.month.getMonth()+1, 1); renderCal(); };
   $("#todayBtn").onclick = () => { const d = new Date(); state.month = new Date(d.getFullYear(), d.getMonth(), 1); renderCal(); };
@@ -238,7 +210,7 @@
   function closeDay() {
     $("#sheet").hidden = true; document.body.style.overflow = "";
     if (state.day) { const d = parse(state.day); state.month = new Date(d.getFullYear(), d.getMonth(), 1); }
-    state.day = null; rerenderAll();
+    state.day = null; renderCal();
   }
   $("#closeSheet").onclick = closeDay;
   $("#prevD").onclick = () => go(-1);
@@ -258,6 +230,7 @@
     if (Math.abs(dx) > 60 && Math.abs(dy) < 50 && Date.now() - st < 700) go(dx < 0 ? 1 : -1);
   }, { passive: true });
 
+  const fmtTime = iso => { if (!iso) return ""; const d = new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   function renderDay(dir) {
     const k = state.day, d = parse(k), e = state.entries.get(k), hol = HOL(k), page = $("#page");
     page.className = "page" + (dir === "l" ? " slide-l" : dir === "r" ? " slide-r" : "");
@@ -334,16 +307,16 @@
   document.querySelectorAll(".rank").forEach(el => el.addEventListener("click", ev => { const b = ev.target.closest("[data-q]"); if (!b) return; showView("search"); $("#q").value = b.dataset.q; runSearch(); }));
 
   function showView(v) {
-    ["cal","feed","search","stats","login"].forEach(x => $("#v-"+x).hidden = x !== v);
+    ["cal","search","stats","login"].forEach(x => $("#v-"+x).hidden = x !== v);
     $("#tabs").hidden = v === "login";
     document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-current", t.dataset.view === v ? "true" : "false"));
-    if (v === "cal") renderCal(); if (v === "feed") renderFeed(); if (v === "search") runSearch(); if (v === "stats") renderStats();
+    if (v === "cal") renderCal(); if (v === "search") runSearch(); if (v === "stats") renderStats();
     window.scrollTo(0, 0);
   }
   document.querySelectorAll(".tab").forEach(t => t.onclick = () => showView(t.dataset.view));
   function rerenderAll() {
     if (!$("#v-login").hidden) showView("cal");
-    if (!$("#v-cal").hidden) renderCal(); if (!$("#v-feed").hidden) renderFeed(); if (!$("#v-search").hidden) runSearch(); if (!$("#v-stats").hidden) renderStats();
+    if (!$("#v-cal").hidden) renderCal(); if (!$("#v-search").hidden) runSearch(); if (!$("#v-stats").hidden) renderStats();
     if (!$("#sheet").hidden && !state.editing) renderDay();
   }
 
