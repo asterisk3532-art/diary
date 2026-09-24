@@ -65,10 +65,10 @@ input,textarea{font:inherit;color:inherit}
 .dow span:first-child{color:var(--holiday)}
 .dow span:last-child{color:var(--sat)}
 .grid{border-top:1px solid var(--rule)}
-.cell{position:relative;aspect-ratio:1/1;min-height:46px;overflow:hidden;border-bottom:1px solid var(--rule);
-  display:block;padding:6px 2px 0;text-align:center;font-variant-numeric:tabular-nums}
+.cell{position:relative;aspect-ratio:1/1.32;min-height:58px;overflow:hidden;border-bottom:1px solid var(--rule);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:6px 2px 0;text-align:center;font-variant-numeric:tabular-nums}
 .cell.out{visibility:hidden;pointer-events:none}
-.cell .n{position:relative;display:inline-grid;place-items:center;width:30px;height:30px;font-size:15px}
+.cell .n{position:relative;display:inline-grid;place-items:center;width:28px;height:28px;font-size:15px}
 .cell.today .n{font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
 .cell.sun .n,.cell.hol .n{color:var(--holiday)}
 .cell.sat .n{color:var(--sat)}
@@ -76,9 +76,9 @@ input,textarea{font:inherit;color:inherit}
 .cell.has .n::before{content:"";position:absolute;inset:0;border:1.5px solid var(--rec);border-radius:50%;
   transform:rotate(-8deg) scale(1.02);opacity:.9}
 .cell.raw .n::before{border-style:dashed}
-.cell .t{position:absolute;left:3px;right:3px;bottom:4px;font-size:10px;line-height:1.25;color:var(--muted);
+.cell .t{position:absolute;left:3px;right:3px;top:41px;font-size:10px;line-height:1.25;color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.cell .hn{position:absolute;left:3px;right:3px;bottom:4px;font-size:9px;color:var(--holiday);
+.cell .hn{position:absolute;left:3px;right:3px;top:41px;font-size:9px;color:var(--holiday);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .cell:active{background:var(--faint)}
 @media (max-width:360px){.cell .t,.cell .hn{display:none}}
@@ -205,6 +205,12 @@ mark{background:var(--stamp-soft);color:inherit;padding:0 1px}
 .login{padding:40px 0 10px}
 .login h1{font-family:var(--serif);font-size:24px;margin:0 0 10px}
 .login p{color:var(--muted);font-size:14px;margin:0 0 20px}
+.month-list{margin-top:18px}
+.feed-entry{padding-top:34px;scroll-margin-top:calc(12px + env(safe-area-inset-top,0px))}
+.feed-entry + .feed-entry{border-top:1px solid var(--rule);margin-top:26px}
+.feed-date{font-family:var(--serif);font-weight:700;font-size:22px;line-height:1.3;margin:0}
+.feed-date .wd{font-size:14px;color:var(--muted);margin-left:6px;font-weight:500}
+.feed-open{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -223,6 +229,16 @@ mark{background:var(--stamp-soft);color:inherit;padding:0 1px}
     <div class="grid" id="grid"></div>
     <p class="legend"><span class="lg rec"></span>日記あり<span class="lg raw"></span>未整形<span class="lg hol"></span>日曜・祝日<span class="lg sat"></span>土曜</p>
     <div class="sync" id="sync" aria-live="polite"></div>
+</section>
+
+  <section class="view" id="v-feed" hidden>
+    <div class="top">
+      <div class="month" id="feedLabel"></div>
+      <div class="mnav">
+        <button class="icon-btn" id="fPrevM" aria-label="前の月"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="icon-btn" id="fNextM" aria-label="次の月"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>
     <div class="month-list">
       <h2 class="section-h" id="listH">この月の日記</h2>
       <div id="monthList"></div>
@@ -265,8 +281,9 @@ mark{background:var(--stamp-soft);color:inherit;padding:0 1px}
 </div>
 
 <nav class="tabs" id="tabs" aria-label="画面の切り替え">
-  <div class="tabs-in">
+  <div class="tabs-in" style="grid-template-columns:repeat(4,1fr)">
     <button class="tab" data-view="cal" aria-current="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>カレンダー</button>
+    <button class="tab" data-view="feed" aria-current="false"><svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20.5H6z"/><path d="M9 10h6M9 13.5h6M9 17h4"/></svg>日記</button>
     <button class="tab" data-view="search" aria-current="false"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>検索</button>
     <button class="tab" data-view="stats" aria-current="false"><svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V5M19 20v-7"/></svg>記録</button>
   </div>
