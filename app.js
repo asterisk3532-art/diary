@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const CFG = window.DIARY_CONFIG || {};
-  const SCOPES = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file";
+  const SCOPES = "https://www.googleapis.com/auth/drive";
   const $ = s => document.querySelector(s);
   const WD = ["日","月","火","水","木","金","土"];
   const pad = n => String(n).padStart(2,"0");
@@ -100,7 +100,7 @@
     return files;
   }
 
-  const state = { files: new Map(), entries: new Map(), month: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(), day: null, editing: false, syncing: false };
+  const state = { files: new Map(), entries: new Map(), month: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(), day: null, editing: false, mode: "note", syncing: false };
 
   const ENTRY_RE = /^(\d{4}-\d{2}-\d{2})\.json$/, MEMO_RE = /^(\d{4}-\d{2}-\d{2})\.memo\..+\.json$/;
   function rebuild() {
@@ -108,7 +108,7 @@
     const sorted = [...state.files.values()].sort((a,b) => a.modifiedTime.localeCompare(b.modifiedTime));
     for (const f of sorted) {
       let m;
-      if ((m = f.name.match(ENTRY_RE)) && f.data) entries.set(m[1], { ...f.data, date: m[1] }); // 同名は新しい方が勝つ
+      if ((m = f.name.match(ENTRY_RE)) && f.data) entries.set(m[1], { ...f.data, date: m[1], _fileId: f.id }); // 同名は新しい方が勝つ
       else if ((m = f.name.match(MEMO_RE)) && f.data) { if (!memos.has(m[1])) memos.set(m[1], []); memos.get(m[1]).push(f.data); }
     }
     for (const [d, list] of memos) {
@@ -163,6 +163,22 @@
   $("#signIn").onclick = () => signIn(false);
   $("#signOut").onclick = async () => { clearToken(); await idb.clear(); state.files.clear(); rebuild(); showView("login"); };
   $("#resync").onclick = () => { showView("cal"); sync({ full: true }); };
+
+  // 日記本体を直接書き換える（保存直前にドライブの最新を読み、編集した項目だけ上書き）
+  async function saveEntry(date, patch) {
+    await sync();
+    const e = state.entries.get(date);
+    if (!e || !e._fileId) throw Object.assign(new Error("no entry"), { code: 404 });
+    const id = e._fileId;
+    const cur = await (await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).json();
+    const next = { ...cur, ...patch, updatedAt: new Date().toISOString() };
+    const r = await api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id,name,modifiedTime`, {
+      method: "PATCH", headers: { "Content-Type": "application/json; charset=UTF-8" }, body: JSON.stringify(next)
+    });
+    const f = await r.json();
+    const rec = { id: f.id, name: f.name, modifiedTime: f.modifiedTime, data: next };
+    state.files.set(f.id, rec); await idb.put(rec); rebuild();
+  }
 
   async function uploadMemo(date, text) {
     const at = new Date().toISOString();
@@ -225,7 +241,7 @@
   $("#closeSheet").onclick = closeDay;
   $("#prevD").onclick = () => go(-1);
   $("#nextD").onclick = () => go(1);
-  $("#editBtn").onclick = () => { state.editing = true; renderDay(); };
+  $("#editBtn").onclick = () => { state.editing = true; state.mode = state.entries.get(state.day)?._fileId ? "edit" : "note"; renderDay(); };
   function go(n) { if (state.editing) return; state.day = addDays(state.day, n); renderDay(n > 0 ? "l" : "r"); $("#sheetBody").scrollTop = 0; }
   document.addEventListener("keydown", e => {
     if ($("#sheet").hidden || state.editing) return;
@@ -246,19 +262,47 @@
     $("#editBtn").hidden = state.editing;
     const head = `<h1 class="date-h"><span class="yr">${d.getFullYear()}</span>${d.getMonth()+1}月${d.getDate()}日<span class="wd">${WD[d.getDay()]}曜日${hol ? "・" + esc(hol) : ""}</span></h1>`;
     if (state.editing) {
-      page.innerHTML = head + `<div class="editor"><label for="fText">メモ</label>
-        <textarea id="fText" placeholder="思いついたことをそのまま。次にClaudeと話すとき、日記の本文にまとめます。"></textarea>
-        <p class="help">メモはドライブに「未整形」として保存され、カレンダーでは点線の印になります。</p>
+      const canEdit = !!(e && e._fileId);
+      const mode = canEdit ? state.mode : "note";
+      const seg = canEdit ? `<div class="seg" role="group" aria-label="編集の種類">
+          <button data-m="edit" aria-pressed="${mode === "edit"}">本文を直す</button>
+          <button data-m="note" aria-pressed="${mode === "note"}">メモを追記</button></div>` : "";
+      const form = mode === "edit" ? `
+          <label for="fTitle">タイトル</label><input id="fTitle" type="text" value="${esc(e.title || "")}">
+          <label for="fOne">ひとこと</label><input id="fOne" type="text" value="${esc(e.oneLine || "")}">
+          <label for="fBody">本文（Markdown）</label><textarea id="fBody">${esc(e.body || "")}</textarea>
+          <label for="fTags">タグ（カンマ区切り）</label><input id="fTags" type="text" value="${esc((e.tags || []).join(", "))}">
+          <label for="fPeople">人物（カンマ区切り）</label><input id="fPeople" type="text" value="${esc((e.people || []).join(", "))}">
+          <p class="help">保存するとドライブの日記ファイルが直接書き換わります。</p>`
+        : `<label for="fText">メモ</label>
+          <textarea id="fText" placeholder="思いついたことをそのまま。次にClaudeと話すとき、日記の本文にまとめます。"></textarea>
+          <p class="help">メモはドライブに「未整形」として保存され、カレンダーでは点線の印になります。</p>`;
+      page.innerHTML = head + `<div class="editor">${seg}${form}
         <div class="actions"><button class="btn primary" id="save">保存する</button><button class="btn" id="cancel">やめる</button></div></div>`;
+      page.querySelectorAll(".seg [data-m]").forEach(b => b.onclick = () => { state.mode = b.dataset.m; renderDay(); });
       $("#cancel").onclick = () => { state.editing = false; renderDay(); };
+      const split = v => v.split(/[,、，]/).map(x => x.trim()).filter(Boolean);
       $("#save").onclick = async () => {
-        const text = $("#fText").value.trim(); if (!text) { toast("メモが空です"); return; }
         if (!navigator.onLine) { toast("オフラインでは保存できません"); return; }
         $("#save").disabled = true;
-        try { await uploadMemo(k, text); toast("メモを保存しました"); state.editing = false; renderDay(); renderCal(); }
-        catch (err) { $("#save").disabled = false; if (err.code === 401) { toast("ログインし直してください"); needAuth(); } else toast("保存できませんでした。もう一度試してください"); }
+        try {
+          if (mode === "edit") {
+            await saveEntry(k, { title: $("#fTitle").value.trim(), oneLine: $("#fOne").value.trim(), body: $("#fBody").value,
+              tags: split($("#fTags").value), people: split($("#fPeople").value) });
+            toast("日記を保存しました");
+          } else {
+            const text = $("#fText").value.trim(); if (!text) { toast("メモが空です"); $("#save").disabled = false; return; }
+            await uploadMemo(k, text); toast("メモを保存しました");
+          }
+          state.editing = false; renderDay(); renderCal();
+        } catch (err) {
+          $("#save").disabled = false;
+          if (err.code === 401) { toast("ログインし直してください"); needAuth(); }
+          else if (err.code === 403) { toast("編集の許可が必要です。ログイン画面に移ります"); setTimeout(() => signIn(false), 1200); }
+          else toast("保存できませんでした。もう一度試してください");
+        }
       };
-      setTimeout(() => $("#fText").focus(), 50);
+      setTimeout(() => (mode === "edit" ? $("#fTitle") : $("#fText")).focus(), 50);
       return;
     }
     if (!e) {

@@ -228,6 +228,10 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none;height:100%}
 #v-feed .top::before{content:"";position:absolute;left:-20px;right:-20px;bottom:100%;
   height:env(safe-area-inset-top,0px);background:var(--paper)}
 #v-feed .top::after{content:"";position:absolute;left:-20px;right:-20px;top:0;bottom:-1px;background:var(--paper);z-index:-1}
+
+.editor .seg{margin:6px 0 4px}
+#fBody{min-height:55vh;font-size:16px;background-image:none;line-height:1.75}
+[hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -313,7 +317,7 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none;height:100%}
       <button class="icon-btn" id="prevD" aria-label="前の日"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
       <button class="icon-btn" id="nextD" aria-label="次の日"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
     </div>
-    <button class="icon-btn" id="editBtn" aria-label="メモを書く"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
+    <button class="icon-btn" id="editBtn" aria-label="編集・メモ"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button>
   </div>
   <div class="sheet-body" id="sheetBody"><div class="page" id="page"></div></div>
 </div>
