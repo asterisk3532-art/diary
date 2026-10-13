@@ -144,6 +144,12 @@ input,textarea{font:inherit;color:inherit}
 .note{border-top:1px dashed var(--rule);padding:10px 0;white-space:pre-wrap;font-size:15px}
 .note time{display:block;font-size:12px;color:var(--muted)}
 .raw-hint{font-size:12px;color:var(--stamp);margin:10px 0 0}
+.sleep{display:flex;flex-wrap:wrap;gap:2px 18px;margin:12px 0 0;padding:8px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-size:13px;color:var(--muted);line-height:1.8}
+.sleep .lbl{margin-right:6px}
+.sleep b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.sleep small{font-size:12px;margin-left:4px}
+.sleep .naps{flex-basis:100%}
+.sleep .naps span+span::before{content:"・";color:var(--muted)}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
 .btn{height:40px;padding:0 16px;border:1px solid var(--ink);border-radius:4px;font-size:14px;display:inline-flex;align-items:center;gap:6px}
 .btn.primary{background:var(--ink);color:var(--paper)}

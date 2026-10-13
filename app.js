@@ -100,17 +100,61 @@
     return files;
   }
 
-  const state = { files: new Map(), entries: new Map(), month: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(), day: null, editing: false, mode: "note", syncing: false };
+  const state = { files: new Map(), entries: new Map(), month: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(), day: null, editing: false, mode: "note", syncing: false, sleep: new Map() };
 
-  const ENTRY_RE = /^(\d{4}-\d{2}-\d{2})\.json$/, MEMO_RE = /^(\d{4}-\d{2}-\d{2})\.memo\..+\.json$/;
+  const ENTRY_RE = /^(\d{4}-\d{2}-\d{2})\.json$/, MEMO_RE = /^(\d{4}-\d{2}-\d{2})\.memo\..+\.json$/, SLEEP_RE = /^sleep\..+\.txt$/;
+  const isSynced = name => ENTRY_RE.test(name) || MEMO_RE.test(name) || SLEEP_RE.test(name);
+
+  /* ================= 睡眠（ヘルスケア → ショートカット → sleep.*.txt） =================
+     1行1サンプル「開始|終了|値」。値が覚醒・ベッド内のものは除き、眠っていた区間だけを使う。
+     ・重なりをまとめ、30分以内の途切れ（夜中に少し起きた等）は同じ睡眠としてつなぐ
+     ・開始時刻から15時間引いた日を「その夜」とし、夜ごとに一番長い睡眠（90分以上）をメインにする
+       → 3時に寝ても前の日の就寝、翌日のページではその睡眠の終わりが起床
+     ・メイン以外は、始まった日の昼寝 */
+  const GAP = 30*60e3, MAIN_MIN = 90*60e3, NIGHT_SHIFT = 15*3600e3;
+  function buildSleep(texts) {
+    const seen = new Set(), iv = [];
+    for (const t of texts) for (const line of String(t || "").split(/\r?\n/)) {
+      const [a, b, v = ""] = line.split("|").map(s => s.trim());
+      if (!a || !b || /覚醒|awake|ベッド|in ?bed/i.test(v)) continue;
+      const s = Date.parse(a), e = Date.parse(b);
+      if (!(e > s) || seen.has(s + "|" + e)) continue;
+      seen.add(s + "|" + e); iv.push([s, e]);
+    }
+    iv.sort((x, y) => x[0] - y[0]);
+    const blocks = [];
+    for (const [s, e] of iv) { const L = blocks[blocks.length-1]; if (L && s <= L[1]) L[1] = Math.max(L[1], e); else blocks.push([s, e]); }
+    const ses = [];
+    for (const [s, e] of blocks) { const L = ses[ses.length-1]; if (L && s - L.end <= GAP) { L.end = e; L.asleep += e - s; } else ses.push({ start: s, end: e, asleep: e - s }); }
+    const best = new Map();
+    for (const x of ses) { if (x.asleep < MAIN_MIN) continue; const k = key(new Date(x.start - NIGHT_SHIFT)), b = best.get(k); if (!b || x.asleep > b.asleep) best.set(k, x); }
+    const out = new Map(), at = k => { if (!out.has(k)) out.set(k, { naps: [] }); return out.get(k); };
+    for (const [k, x] of best) { x.main = true; at(k).bed = x; at(addDays(k, 1)).wake = x; }
+    for (const x of ses) if (!x.main) at(key(new Date(x.start))).naps.push(x);
+    return out;
+  }
+  const hm = ms => { const d = new Date(ms); return `${d.getHours()}:${pad(d.getMinutes())}`; };
+  const dur = ms => { const m = Math.round(ms / 60e3), h = Math.floor(m / 60); return h ? `${h}時間${m % 60 ? (m % 60) + "分" : ""}` : `${m}分`; };
+  function sleepBlock(k) {
+    const s = state.sleep.get(k); if (!s) return "";
+    const rows = [];
+    if (s.wake) rows.push(`<div><span class="lbl">起床</span><b>${hm(s.wake.end)}</b></div>`);
+    if (s.bed) rows.push(`<div><span class="lbl">就寝</span><b>${hm(s.bed.start)}</b>${key(new Date(s.bed.start)) !== k ? `<small>（翌）</small>` : ""}</div>`);
+    if (s.wake) rows.push(`<div><span class="lbl">睡眠</span><b>${dur(s.wake.asleep)}</b><small>前夜 ${hm(s.wake.start)}–${hm(s.wake.end)}</small></div>`);
+    if (s.naps.length) rows.push(`<div class="naps"><span class="lbl">昼寝</span>${s.naps.map(n => `<span><b>${hm(n.start)}–${hm(n.end)}</b><small>（${dur(n.asleep)}）</small></span>`).join("")}</div>`);
+    return rows.length ? `<div class="sleep" aria-label="睡眠の記録">${rows.join("")}</div>` : "";
+  }
+
   function rebuild() {
-    const entries = new Map(), memos = new Map();
+    const entries = new Map(), memos = new Map(), sleepTexts = [];
     const sorted = [...state.files.values()].sort((a,b) => a.modifiedTime.localeCompare(b.modifiedTime));
     for (const f of sorted) {
       let m;
       if ((m = f.name.match(ENTRY_RE)) && f.data) entries.set(m[1], { ...f.data, date: m[1], _fileId: f.id }); // 同名は新しい方が勝つ
       else if ((m = f.name.match(MEMO_RE)) && f.data) { if (!memos.has(m[1])) memos.set(m[1], []); memos.get(m[1]).push(f.data); }
+      else if (SLEEP_RE.test(f.name) && f.text) sleepTexts.push(f.text);
     }
+    state.sleep = buildSleep(sleepTexts);
     for (const [d, list] of memos) {
       const e = entries.get(d) || { date: d, title: "", oneLine: "", body: "", tags: [], people: [], notes: [] };
       e.notes = [...(e.notes||[]), ...list.map(x => ({ text: x.text, at: x.at }))].sort((a,b) => (a.at||"").localeCompare(b.at||""));
@@ -135,12 +179,13 @@
       const remote = await listFolder(), seen = new Set();
       for (const f of remote) {
         seen.add(f.id);
-        if (!ENTRY_RE.test(f.name) && !MEMO_RE.test(f.name)) continue;
+        if (!isSynced(f.name)) continue;
         const cached = state.files.get(f.id);
         if (cached && cached.modifiedTime === f.modifiedTime) continue;
         const r = await api(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
-        let data = null; try { data = await r.json(); } catch {}
-        const rec = { id: f.id, name: f.name, modifiedTime: f.modifiedTime, data };
+        const rec = { id: f.id, name: f.name, modifiedTime: f.modifiedTime };
+        if (SLEEP_RE.test(f.name)) { try { rec.text = await r.text(); } catch {} }
+        else { let data = null; try { data = await r.json(); } catch {} rec.data = data; }
         state.files.set(f.id, rec); await idb.put(rec);
       }
       for (const id of [...state.files.keys()]) if (!seen.has(id)) { state.files.delete(id); await idb.del(id); }
@@ -306,14 +351,14 @@
       return;
     }
     if (!e) {
-      page.innerHTML = head + `<div class="blank"><p>この日の日記はまだありません。</p><button class="btn primary" id="startNote">メモを書く</button></div>`;
+      page.innerHTML = head + sleepBlock(k) + `<div class="blank"><p>この日の日記はまだありません。</p><button class="btn primary" id="startNote">メモを書く</button></div>`;
       $("#startNote").onclick = () => { state.editing = true; renderDay(); };
       return;
     }
     const tags = (e.tags||[]).map(t => `<button class="tag" data-q="#${esc(t)}">#${esc(t)}</button>`).join("");
     const people = (e.people||[]).map(p => `<button class="tag" data-q="${esc(p)}">${esc(p)}</button>`).join("");
     const notes = (e.notes||[]).length ? `<div class="notes"><h2 class="section-h">手書きメモ</h2>${e.notes.map(n => `<div class="note"><time>${esc(fmtTime(n.at))}</time>${esc(n.text)}</div>`).join("")}</div>` : "";
-    page.innerHTML = head + (e.title ? `<h2 class="entry-title">${esc(e.title)}</h2>` : "") +
+    page.innerHTML = head + sleepBlock(k) + (e.title ? `<h2 class="entry-title">${esc(e.title)}</h2>` : "") +
       `<div class="meta">${people ? `<div><span class="lbl">人</span>${people}</div>` : ""}${tags ? `<div>${tags}</div>` : ""}</div>` +
       (e.formatted === false ? `<p class="raw-hint">未整形のメモがあります。次にClaudeと話すときに日記へまとめられます。</p>` : "") +
       (e.oneLine ? `<div class="oneline">${esc(e.oneLine)}</div>` : "") + `<div class="md">${md(e.body)}</div>` + notes;
