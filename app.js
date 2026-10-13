@@ -102,8 +102,8 @@
 
   const state = { files: new Map(), entries: new Map(), month: (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })(), day: null, editing: false, mode: "note", syncing: false, sleep: new Map() };
 
-  const ENTRY_RE = /^(\d{4}-\d{2}-\d{2})\.json$/, MEMO_RE = /^(\d{4}-\d{2}-\d{2})\.memo\..+\.json$/, SLEEP_RE = /^sleep\..+\.txt$/;
-  const isSynced = name => ENTRY_RE.test(name) || MEMO_RE.test(name) || SLEEP_RE.test(name);
+  const ENTRY_RE = /^(\d{4}-\d{2}-\d{2})\.json$/, MEMO_RE = /^(\d{4}-\d{2}-\d{2})\.memo\..+\.json$/, SLEEP_RE = /^sleep\..+\.txt$/, TZ_FILE = "tz.json";
+  const isSynced = name => ENTRY_RE.test(name) || MEMO_RE.test(name) || SLEEP_RE.test(name) || name === TZ_FILE;
 
   /* ================= 睡眠（ヘルスケア → ショートカット → sleep.*.txt） =================
      1行1サンプル「開始|終了|値」。値が覚醒・ベッド内のものは除き、眠っていた区間だけを使う。
@@ -112,6 +112,16 @@
        → 3時に寝ても前の日の就寝、翌日のページではその睡眠の終わりが起床
      ・メイン以外は、始まった日の昼寝 */
   const GAP = 30*60e3, MAIN_MIN = 90*60e3, NIGHT_SHIFT = 15*3600e3;
+  /* 時差：日記フォルダの tz.json に [{"from":"2026-09-30","to":"2026-10-10","tz":"+03:00","place":"トルコ"}] のように
+     期間を書いておくと、その日は現地時間で表示・日付分けする（旅行中など）。書いていない日は端末の時刻 */
+  const parseTz = s => { const m = /^([+-])(\d{1,2}):?(\d{2})?$/.exec(String(s || "").trim()); return m ? (m[1] === "-" ? -1 : 1) * (+m[2] * 60 + +(m[3] || 0)) : null; };
+  const wallKey = (ms, off) => { const w = new Date(ms + off * 60e3); return `${w.getUTCFullYear()}-${pad(w.getUTCMonth()+1)}-${pad(w.getUTCDate())}`; };
+  const offsetAt = ms => {
+    const dev = -new Date(ms).getTimezoneOffset(), r = tzRange(wallKey(ms, dev)), o = r && parseTz(r.tz);
+    return o == null ? dev : o;
+  };
+  const tzRange = k => (state.tz || []).find(r => r && r.from <= k && k <= r.to);
+  const wk = ms => wallKey(ms, offsetAt(ms));
   function buildSleep(texts) {
     const seen = new Set(), iv = [];
     for (const t of texts) for (const line of String(t || "").split(/\r?\n/)) {
@@ -127,40 +137,43 @@
     const ses = [];
     for (const [s, e] of blocks) { const L = ses[ses.length-1]; if (L && s - L.end <= GAP) { L.end = e; L.asleep += e - s; } else ses.push({ start: s, end: e, asleep: e - s }); }
     const best = new Map();
-    for (const x of ses) { if (x.asleep < MAIN_MIN) continue; const k = key(new Date(x.start - NIGHT_SHIFT)), b = best.get(k); if (!b || x.asleep > b.asleep) best.set(k, x); }
+    for (const x of ses) { if (x.asleep < MAIN_MIN) continue; const k = wk(x.start - NIGHT_SHIFT), b = best.get(k); if (!b || x.asleep > b.asleep) best.set(k, x); }
     const out = new Map(), at = k => { if (!out.has(k)) out.set(k, { naps: [] }); return out.get(k); };
     for (const [k, x] of best) { x.main = true; at(k).bed = x; at(addDays(k, 1)).wake = x; }
-    for (const x of ses) if (!x.main) at(key(new Date(x.start))).naps.push(x);
+    for (const x of ses) if (!x.main) at(wk(x.start)).naps.push(x);
     return out;
   }
-  const hm = ms => { const d = new Date(ms); return `${d.getHours()}:${pad(d.getMinutes())}`; };
+  const hm = ms => { const d = new Date(ms + offsetAt(ms) * 60e3); return `${d.getUTCHours()}:${pad(d.getUTCMinutes())}`; };
   const dur = ms => { const m = Math.round(ms / 60e3), h = Math.floor(m / 60); return h ? `${h}時間${m % 60 ? (m % 60) + "分" : ""}` : `${m}分`; };
   function sleepBlock(k) {
     const s = state.sleep.get(k); if (!s) return "";
-    const rows = [];
+    const rows = [], tr = tzRange(k), tz = tr && tr.tz;
     if (s.wake) rows.push(`<div><span class="lbl">起床</span><b>${hm(s.wake.end)}</b></div>`);
-    if (s.bed) rows.push(`<div><span class="lbl">就寝</span><b>${hm(s.bed.start)}</b>${key(new Date(s.bed.start)) !== k ? `<small>（翌）</small>` : ""}</div>`);
+    if (s.bed) rows.push(`<div><span class="lbl">就寝</span><b>${hm(s.bed.start)}</b>${wk(s.bed.start) !== k ? `<small>（翌）</small>` : ""}</div>`);
     if (s.wake) rows.push(`<div><span class="lbl">睡眠</span><b>${dur(s.wake.asleep)}</b><small>前夜 ${hm(s.wake.start)}–${hm(s.wake.end)}</small></div>`);
     if (s.naps.length) rows.push(`<div class="naps"><span class="lbl">昼寝</span>${s.naps.map(n => `<span><b>${hm(n.start)}–${hm(n.end)}</b><small>（${dur(n.asleep)}）</small></span>`).join("")}</div>`);
+    if (rows.length && parseTz(tz) != null) rows.push(`<div class="tzn"><small>${tr.place ? esc(tr.place) + "時間" : "現地時間"}（UTC${esc(tz)}）</small></div>`);
     return rows.length ? `<div class="sleep" aria-label="睡眠の記録">${rows.join("")}</div>` : "";
   }
 
   function rebuild() {
     const entries = new Map(), memos = new Map(), sleepTexts = [];
+    state.tz = [];
     const sorted = [...state.files.values()].sort((a,b) => a.modifiedTime.localeCompare(b.modifiedTime));
     for (const f of sorted) {
       let m;
       if ((m = f.name.match(ENTRY_RE)) && f.data) entries.set(m[1], { ...f.data, date: m[1], _fileId: f.id }); // 同名は新しい方が勝つ
       else if ((m = f.name.match(MEMO_RE)) && f.data) { if (!memos.has(m[1])) memos.set(m[1], []); memos.get(m[1]).push(f.data); }
       else if (SLEEP_RE.test(f.name) && f.text) sleepTexts.push(f.text);
+      else if (f.name === TZ_FILE && Array.isArray(f.data)) state.tz = f.data;
     }
-    state.sleep = buildSleep(sleepTexts);
     for (const [d, list] of memos) {
       const e = entries.get(d) || { date: d, title: "", oneLine: "", body: "", tags: [], people: [], notes: [] };
       e.notes = [...(e.notes||[]), ...list.map(x => ({ text: x.text, at: x.at }))].sort((a,b) => (a.at||"").localeCompare(b.at||""));
       e.formatted = false; entries.set(d, e);
     }
     state.entries = entries;
+    state.sleep = buildSleep(sleepTexts);
   }
 
   async function loadCache() {
