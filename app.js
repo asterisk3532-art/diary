@@ -106,7 +106,7 @@
   const isSynced = name => ENTRY_RE.test(name) || MEMO_RE.test(name) || SLEEP_RE.test(name) || name === TZ_FILE;
 
   /* ================= 睡眠（ヘルスケア → ショートカット → sleep.*.txt） =================
-     1行1サンプル「開始|終了|値」。値が覚醒・ベッド内のものは除き、眠っていた区間だけを使う。
+     1行1サンプル「開始|終了|値」。ベッド内（iPhoneの睡眠スケジュール）は使わない。
      ・重なりをまとめ、30分以内の途切れ（夜中に少し起きた等）は同じ睡眠としてつなぐ
      ・開始時刻から15時間引いた日を「その夜」とし、夜ごとに一番長い睡眠（90分以上）をメインにする
        → 3時に寝ても前の日の就寝、翌日のページではその睡眠の終わりが起床
@@ -126,16 +126,26 @@
     const seen = new Set(), iv = [];
     for (const t of texts) for (const line of String(t || "").split(/\r?\n/)) {
       const [a, b, v = ""] = line.split("|").map(s => s.trim());
-      if (!a || !b || /覚醒|awake|ベッド|in ?bed/i.test(v)) continue;
-      const s = Date.parse(a), e = Date.parse(b);
-      if (!(e > s) || seen.has(s + "|" + e)) continue;
-      seen.add(s + "|" + e); iv.push([s, e]);
+      if (!a || !b || /ベッド|in ?bed/i.test(v)) continue;
+      const s = Date.parse(a), e = Date.parse(b), awake = /覚醒|awake/i.test(v), id = s + "|" + e + "|" + awake;
+      if (!(e > s) || seen.has(id)) continue;
+      seen.add(id); iv.push({ s, e, awake });
     }
-    iv.sort((x, y) => x[0] - y[0]);
-    const blocks = [];
-    for (const [s, e] of iv) { const L = blocks[blocks.length-1]; if (L && s <= L[1]) L[1] = Math.max(L[1], e); else blocks.push([s, e]); }
+    iv.sort((x, y) => x.s - y.s || x.e - y.e);
+    // 覚醒も含めた記録のつながりで1回の睡眠を作る（Watchが「覚醒」と記録した時間は睡眠の途中）。眠っていた時間は覚醒を除いて数える
     const ses = [];
-    for (const [s, e] of blocks) { const L = ses[ses.length-1]; if (L && s - L.end <= GAP) { L.end = e; L.asleep += e - s; } else ses.push({ start: s, end: e, asleep: e - s }); }
+    for (const x of iv) {
+      let L = ses[ses.length-1];
+      if (!L || x.s - L.cover > GAP) { L = { cover: x.e, asl: [] }; ses.push(L); }
+      L.cover = Math.max(L.cover, x.e);
+      if (!x.awake) L.asl.push([x.s, x.e]);
+    }
+    for (let i = ses.length - 1; i >= 0; i--) {
+      const x = ses[i], m = [];
+      for (const [s0, e0] of x.asl) { const l = m[m.length-1]; if (l && s0 <= l[1]) l[1] = Math.max(l[1], e0); else m.push([s0, e0]); }
+      if (!m.length) { ses.splice(i, 1); continue; }
+      x.start = m[0][0]; x.end = m[m.length-1][1]; x.asleep = m.reduce((n, [s0, e0]) => n + e0 - s0, 0);
+    }
     const best = new Map();
     for (const x of ses) { if (x.asleep < MAIN_MIN) continue; const k = wk(x.start - NIGHT_SHIFT), b = best.get(k); if (!b || x.asleep > b.asleep) best.set(k, x); }
     const out = new Map(), at = k => { if (!out.has(k)) out.set(k, { naps: [] }); return out.get(k); };
