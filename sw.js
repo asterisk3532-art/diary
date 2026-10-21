@@ -1,6 +1,6 @@
 // アプリ本体だけをキャッシュする。日記データ（googleapis）はキャッシュしない。
-const CACHE = "diary-shell-v8";
-const SHELL = ["./", "./index.html", "./app.js", "./config.js", "./manifest.webmanifest",
+const CACHE = "diary-shell-v9";
+const SHELL = ["./", "./index.html", "./app.js", "./lock.js", "./config.js", "./manifest.webmanifest",
   "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
   "https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"];
