@@ -117,7 +117,13 @@
   const toast = t => { const x = $("#toast"); if (!x) return; x.textContent = t; x.classList.add("on"); setTimeout(() => x.classList.remove("on"), 2000); };
 
   /* ---------- 起動・切り替え ---------- */
-  function start() { if (load() && load().hash) lockScreen(); else setupScreen(false); }
+  function start() {
+    let pass = 0; try { pass = +(sessionStorage.getItem("diary.lockPass") || 0); sessionStorage.removeItem("diary.lockPass"); } catch {}
+    const cfg = load();
+    if (!cfg || !cfg.hash) return setupScreen(false);
+    if (Date.now() - pass < 120000) { hide(); return; } // 開いている最中のログインし直しから戻ってきたところ
+    lockScreen();
+  }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       if (state === "open") { hiddenAt = Date.now(); state = "covered"; show(`<h1>日記</h1>`); } // アプリ切替画面に中身を映さない
@@ -136,7 +142,8 @@
       try { cfg.credId = await registerFace(); store(cfg); toast("Face IDをオンにしました"); } catch { toast("Face IDを登録できませんでした"); }
       renderSettings();
     },
-    lockNow: () => lockScreen()
+    lockNow: () => lockScreen(),
+    isOpen: () => state === "open"
   };
   function renderSettings() {
     const b = $("#faceToggle"); if (b) b.textContent = (load() || {}).credId ? "Face IDをオフにする" : "Face IDをオンにする";

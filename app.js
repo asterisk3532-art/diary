@@ -69,6 +69,8 @@
     if (CFG.LOGIN_HINT) p.set("login_hint", CFG.LOGIN_HINT);
     if (silent) p.set("prompt", "none");
     try { sessionStorage.setItem("diary.silentAt", String(Date.now())); } catch {}
+    // ロックを開けている最中のログインし直しなら、戻ってきたときにもう一度ロックしない（2分以内・1回だけ）
+    try { if (window.DiaryLock && DiaryLock.isOpen()) sessionStorage.setItem("diary.lockPass", String(Date.now())); } catch {}
     location.replace("https://accounts.google.com/o/oauth2/v2/auth?" + p);
   }
   // 戻ってきたとき
@@ -455,5 +457,5 @@
     else showView("login");
   }
   window.addEventListener("online", () => sync());
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && readToken()) sync(); });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sync(); }); // ログインが切れていても戻ってきたら自動でログインし直して同期
 })();

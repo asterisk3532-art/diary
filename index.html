@@ -152,9 +152,9 @@ input,textarea{font:inherit;color:inherit}
 .sleep .tzn{flex-basis:100%}
 .sleep .naps span+span::before{content:"・";color:var(--muted)}
 .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
-.lock{position:fixed;inset:0;z-index:100;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px;
+#lock{position:fixed;inset:0;z-index:100;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:24px;
   padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
-.lock[hidden]{display:none}
+#lock[hidden]{display:none}
 html.locked,html.locked body{overflow:hidden}
 .lock-in{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:stretch;gap:12px;text-align:center}
 .lock-in h1{font-family:var(--serif);font-weight:700;font-size:28px;margin:0 0 4px}
@@ -348,7 +348,7 @@ html.lock,html.lock body{overflow:hidden;overscroll-behavior:none;height:100%}
 </div>
 
 <div class="toast" id="toast" role="status"></div>
-<div class="lock" id="lock" role="dialog" aria-modal="true" aria-label="ロック"></div>
+<div id="lock" role="dialog" aria-modal="true" aria-label="ロック"></div>
 <script src="lock.js"></script>
 <script src="app.js"></script>
 </body>
